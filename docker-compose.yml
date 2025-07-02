@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: rag_db
+      DATABASE_URL: postgresql://postgres:1234@postgres:5432/rag_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  pgvector:
+    image: ankane/pgvector:latest
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://postgres:1234@postgres:5432/rag_db
+    command: >
+      sh -c "
+      echo 'Attente de PostgreSQL...' &&
+      until pg_isready -h postgres -p 5432 -U postgres; do
+        sleep 1
+      done &&
+      echo 'PostgreSQL prêt, création de l’extension vector...' &&
+      psql postgresql://postgres:1234@postgres:5432/rag_db -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+      "
+  rag:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      - pgvector
+    environment:
+      DATABASE_URL: postgresql://postgres:1234@postgres:5432/rag_db
+    volumes:
+      - .:/app
+    command: python ingestion.py
+  
+volumes:
+  pgdata:
